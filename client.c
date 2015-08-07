@@ -497,6 +497,7 @@ client_stdin_callback(unused int fd, unused short events, unused void *data1)
 	if (data.size < 0 && (errno == EINTR || errno == EAGAIN))
 		return;
 
+  log_debug("client read: \"%.*s\"", data.size, data.data);
 	client_write_server(MSG_STDIN, &data, sizeof data);
 	if (data.size <= 0)
 		event_del(&client_stdin);
@@ -507,6 +508,7 @@ client_stdin_callback(unused int fd, unused short events, unused void *data1)
 void
 client_write(int fd, const char *data, size_t size)
 {
+  log_debug("client_write \"%.*s\"", size, data);
 	ssize_t	used;
 
 	while (size != 0) {
