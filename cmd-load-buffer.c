@@ -72,6 +72,7 @@ cmd_load_buffer_exec(struct cmd *self, struct cmd_q *cmdq)
 		buffer_ptr = xmalloc(sizeof *buffer_ptr);
 		*buffer_ptr = buffer;
 
+                log_debug("load buffer setting stdin callback");
 		error = server_set_stdin_callback(c, cmd_load_buffer_callback,
 		    buffer_ptr, &cause);
 		if (error != 0) {
@@ -148,6 +149,7 @@ cmd_load_buffer_callback(struct client *c, int closed, void *data)
 	if (!closed)
 		return;
 	c->stdin_callback = NULL;
+        log_debug("cmd_load_buffer_callback resetting stdin callback to nil");
 
 	c->references--;
 	if (c->flags & CLIENT_DEAD)

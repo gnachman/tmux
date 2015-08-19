@@ -375,6 +375,7 @@ client_write_one(enum msgtype type, int fd, const void *buf, size_t len)
 
 	retval = imsg_compose(&client_ibuf, type, PROTOCOL_VERSION, -1, fd,
 	    (void*)buf, len);
+        log_debug("client_write_one: imsg_compose returned %d", retval);
 	if (retval != 1)
 		return (-1);
 	return (0);
@@ -387,6 +388,7 @@ client_write_server(enum msgtype type, const void *buf, size_t len)
 	int	retval;
 
 	retval = client_write_one(type, -1, buf, len);
+  log_debug("client_write_server: client_write_one returned %d", retval);
 	if (retval == 0)
 		client_update_event();
 	return (retval);

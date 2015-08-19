@@ -834,11 +834,16 @@ server_client_msg_dispatch(struct client *c)
 				fatalx("bad MSG_STDIN size");
 			memcpy(&stdindata, data, sizeof stdindata);
 
-			if (c->stdin_callback == NULL)
+                        log_debug("STDIN: %.*s", stdindata.size, stdindata.data);
+			if (c->stdin_callback == NULL) {
+                          log_debug("No stdin callback!");
 				break;
-			if (stdindata.size <= 0)
+                        }
+			if (stdindata.size <= 0) {
+                          log_debug("Stdin is closed!");
 				c->stdin_closed = 1;
-			else {
+                        } else {
+                          log_debug("Adding the event buffer");
 				evbuffer_add(c->stdin_data, stdindata.data,
 				    stdindata.size);
 			}
@@ -955,6 +960,8 @@ server_client_msg_identify(struct client *c, struct imsg *imsg)
 	size_t	 	 datalen;
 	int		 flags;
 
+        log_debug("server_client_msg_identify");
+
 	if (c->flags & CLIENT_IDENTIFIED)
 		fatalx("out-of-order identify message");
 
@@ -998,8 +1005,11 @@ server_client_msg_identify(struct client *c, struct imsg *imsg)
 		break;
 	}
 
-	if (imsg->hdr.type != MSG_IDENTIFY_DONE)
-		return;
+	if (imsg->hdr.type != MSG_IDENTIFY_DONE) {
+          log_debug("Header type is %d, not MSG_IDENTIFY_DONE, so returning", imsg->hdr.type);
+          return;
+        }
+
 	c->flags |= CLIENT_IDENTIFIED;
 
 #ifdef __CYGWIN__
@@ -1008,6 +1018,7 @@ server_client_msg_identify(struct client *c, struct imsg *imsg)
 #endif
 
 	if (c->flags & CLIENT_CONTROL) {
+          log_debug("Set stdin callback to control_callback");
 		c->stdin_callback = control_callback;
 
 		evbuffer_free(c->stderr_data);

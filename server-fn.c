@@ -573,6 +573,7 @@ int
 server_set_stdin_callback(struct client *c, void (*cb)(struct client *, int,
     void *), void *cb_data, char **cause)
 {
+  log_debug("server_set_stdin_callback to %p", cb);
 	if (c == NULL || c->session != NULL) {
 		*cause = xstrdup("no client with stdin");
 		return (-1);
