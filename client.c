@@ -273,7 +273,11 @@ client_main(int argc, char **argv, int flags)
 		tio.c_cc[VTIME] = 0;
 		cfsetispeed(&tio, cfgetispeed(&saved_tio));
 		cfsetospeed(&tio, cfgetospeed(&saved_tio));
-		tcsetattr(STDIN_FILENO, TCSANOW, &tio);
+		if (tcsetattr(STDIN_FILENO, TCSANOW, &tio) == -1) {
+                  log_debug("tcsetattr failed: %s", strerror(errno));
+                } else {
+                  log_debug("tcsetattr succeeded.");
+                }
 	}
 
 	/* Establish signal handlers. */
@@ -489,6 +493,19 @@ lost_server:
 	event_loopexit(NULL);
 }
 
+static void print_icrnl(void) {
+  struct termios tio;
+  if (tcgetattr(STDIN_FILENO, &tio) != 0) {
+    log_debug("print_icrnl: tcgetattr failed: %s", strerror(errno));
+    return;
+  }
+  if (tio.c_iflag & ICRNL) {
+    log_debug("print_icrnl: ICRNL is SET");
+  } else {
+    log_debug("print_icrnl: ICRNL is NOT SET");
+  }
+}
+
 /* Callback for client stdin read events. */
 void
 client_stdin_callback(unused int fd, unused short events, unused void *data1)
@@ -499,7 +516,8 @@ client_stdin_callback(unused int fd, unused short events, unused void *data1)
 	if (data.size < 0 && (errno == EINTR || errno == EAGAIN))
 		return;
 
-  log_debug("client read: \"%.*s\"", data.size, data.data);
+        print_icrnl();
+        log_debug("client read: \"%.*s\"", data.size, data.data);
 	client_write_server(MSG_STDIN, &data, sizeof data);
 	if (data.size <= 0)
 		event_del(&client_stdin);
