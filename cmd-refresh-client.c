@@ -128,7 +128,11 @@ cmd_refresh_client_exec(struct cmd *self, struct cmdq_item *item)
 		}
 		tty_set_size(&c->tty, x, y);
 		c->flags |= CLIENT_SIZECHANGED;
-		recalculate_sizes();
+		/*recalculate_sizes();*/
+                /*
+                w = c->session->curw->window;
+                resize_window(w, x, y);
+                */
 		return (CMD_RETURN_NORMAL);
 	}
 
