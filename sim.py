@@ -16,8 +16,8 @@ class Queue:
     def __repr__(self):
         return str(self.queue)
 
-    def append(self, length, t):
-        t = (length, t)
+    def append(self, length, t, info):
+        t = (length, t, info)
         self.queue.append(t)
         self.sum += length
 
@@ -30,17 +30,17 @@ class Queue:
         """Reads up to `limit` bytes and returns (number of bytes read, timestamp)."""
         if not self.queue:
             return (0, None)
-        value, t = self.queue[0]
+        value, t, info = self.queue[0]
         amount = value
         if value > limit:
             amount = limit
-        length, time = self.queue[0]
+        length, time, info = self.queue[0]
         length -= amount
-        self.queue[0] = (length, time)
+        self.queue[0] = (length, time, info)
         self.sum -= amount
         if length == 0:
             del self.queue[0]
-        return (amount, t)
+        return (amount, t, info)
 
     def total(self):
         return self.sum
@@ -56,8 +56,9 @@ class Network:
 
     def __repr__(self):
         return "Ingress: %s    Egress: %s" % (self.ingress, self.egress)
-    def write(self, length, t):
-        self.ingress.append(length, t)
+
+    def write(self, length, t, info=None):
+        self.ingress.append(length, t, info)
         dlog("%s add %d to ingress" % (self.name, length))
 
     def update(self, now):
@@ -65,29 +66,33 @@ class Network:
         available = self.throughput
         total = 0
         while available > 0 and not self.ingress.is_empty():
-            length, time = self.ingress.peek()
+            length, time, info = self.ingress.peek()
             if now - time < self.latency:
                 # Too new.
                 break
             self.ingress.get(available)
-            self.egress.append(length, time)
+            self.egress.append(length, time, info)
             available -= length
             total += length
             dlog("%s move %d to egress. now=%d time=%d latency=%d" % (self.name, length, now, time, self.latency))
         dlog("%s transmits %d bytes" % (self.name, total))
 
     def read(self):
-        """Reads from the egress queue. Returns (timestamp, length) where
-        timestamp is the send time of the oldest message read."""
+        """Reads from the egress queue. Returns (timestamp, length, info) where
+        timestamp is the send time of the oldest message read. info will come
+        from the first message read."""
         oldest = None
         sum = 0
         dlog("%s reading from egress queue: %s" % (self.name, self.egress))
+        firstInfo = None
         while not self.egress.is_empty():
-            length, time = self.egress.get(self.throughput)
+            length, time, info = self.egress.get(self.throughput)
+            if firstInfo is None:
+                firstInfo = info
             if oldest is None:
                 oldest = time
             sum += length
-        return (oldest, sum)
+        return (oldest, sum, firstInfo)
 
 class Terminal:
     def __init__(self, outbound, inbound):
@@ -95,12 +100,12 @@ class Terminal:
         self.inbound = inbound
 
     def update(self, now):
-        time, length = self.inbound.read()
+        time, length, info = self.inbound.read()
         if time is None:
             return
         dlog("read %d"% length)
         dlog("terminal acks %d bytes of age %d with timestamp %d" % (length, now - time, time))
-        self.outbound.write(length, time)
+        self.outbound.write(length, now, info)
 
 
 class Controller:
@@ -139,7 +144,7 @@ class Controller:
         mean = statistics.mean(self.lats)
         if mean > self.prev:
             self.status = "slow down"
-            delta = -200
+            delta = -max(200, self.window * 0.5)
             self.next = now + 2 * latency
         elif mean <= self.prev and self.alwaysSaturated:
             self.status = "speed up"
@@ -178,7 +183,7 @@ class Tmux:
 
     def read_acks(self, now):
         """Reads acks, if any, and returns latency or None."""
-        time, length = self.inbound.read()
+        _dc, length, time = self.inbound.read()
         if time is None:
             self.bytesAcked = 0
             return None
@@ -206,11 +211,11 @@ class Tmux:
         self.capacity = max(128, self.capacity + delta)
 
         new_bytes = 0
-        for i in range(int(self.rand.uniform(1, 100))):
+        for i in range(int(self.rand.uniform(1, 10000))):
             if self.available() == 0:
                 break
             n = min(self.available(), self.readpty())
-            self.outbound.write(n, now)
+            self.outbound.write(n, now, now)
             self.used += n
             new_bytes += n
 
@@ -247,7 +252,8 @@ now = 0
 # Control: Status of the controller
 # NetThru: Actual maximum network throughput
 # NetLat: Actual network latency
-log(["Time", "Wrote", "Released", "Available", "Capacity", "dCapacity", "Queued", "Latency", "Ack time", "Control", "NetThru", "NetLat"])
+header = ["Time", "Wrote", "Released", "Available", "Capacity", "dCapacity", "Queued", "Latency", "Ack time", "Control", "NetThru", "NetLat"]
+log(header)
 while True:
     dlog("-- Begin timestep %d --" % now)
     outputConnection.update(now)
@@ -263,8 +269,12 @@ while True:
     tmux.lastDelta = ""
 
     now += 20
+    if now % 1000 == 0:
+        log(header)
+
     if now % 10000 == 0:
         outputConnection.throughput = int(rand.uniform(100, 10000))
         outputConnection.latency = int(rand.uniform(10, 100))
+        ackConnection.latency = outputConnection.latency
         print(" - update network -")
 
